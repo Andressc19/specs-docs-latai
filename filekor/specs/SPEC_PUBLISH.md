@@ -9,7 +9,7 @@
 
 **setuptools** is the build backend for fileKor.
 
-Standard Python packaging tool that works well with uv, pip, and Poetry. Supports editable installs and src layout out of the box.
+Standard Python packaging tool that works well with uv and pip. Supports editable installs and src layout out of the box.
 
 ---
 
@@ -123,14 +123,14 @@ twine upload dist/*
 
 ## 5. CLI Entry Point
 
-The `[tool.poetry.scripts]` section in pyproject.toml creates a `filekor` command:
+La sección `[project.scripts]` en pyproject.toml crea el comando `filekor`:
 
 ```toml
-[tool.poetry.scripts]
+[project.scripts]
 filekor = "filekor.cli:main"
 ```
 
-After installation:
+Después de instalar el paquete:
 
 ```bash
 filekor --version
@@ -142,22 +142,26 @@ python -m filekor extract documento.pdf
 
 ## 6. Publication Process
 
-### Manual Publication
+### Manual Publication (setuptools + twine)
 
 ```bash
-# Update version
-poetry version patch
+# 1. Actualizar versión manualmente en pyproject.toml
+# 2. Build del paquete
+python -m build
 
-# Build package
-poetry build
+# 3. Verificar paquete antes de subir (opcional)
+twine check dist/*
 
-# Publish to PyPI
-poetry publish --username __token__ --password $PYPI_TOKEN
+# 4. Publicar a PyPI
+twine upload dist/*
 ```
 
-### Automated Publication (Future)
+Para TestPyPI (testing):
+```bash
+twine upload --repository testpypi dist/*
+```
 
-GitHub Actions workflow for automatic publishing on release:
+### Automated Publication (GitHub Actions)
 
 ```yaml
 # .github/workflows/publish.yml
@@ -172,14 +176,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Poetry
-        run: pip install poetry
-      - name: Install dependencies
-        run: poetry install
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Build package
-        run: poetry build
+        run: python -m build
       - name: Publish to PyPI
-        run: poetry publish --username __token__ --password ${{ secrets.PYPI_TOKEN }}
+        run: twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
 ```
 
 ---
@@ -188,47 +197,24 @@ jobs:
 
 ### Virtual Environment (uv)
 
-**uv** is the recommended tool for managing virtual environments. It is significantly faster than pip and Poetry for dependency installation.
+**uv** es la herramienta recomendada para gestionar entornos virtuales. Es significativamente más rápido que pip.
 
 ```bash
-# Create virtual environment with uv
+# Crear entorno virtual con uv
 uv venv
-source .venv/bin/activate
+source .venv/bin/activate  # Linux/Mac
+# En Windows: .venv\Scripts\activate
 
-# Install project in editable mode with dev dependencies
+# Instalar proyecto en modo editable con dev dependencies
 uv pip install -e ".[dev]"
 
-# Install all optional dependencies
+# Instalar todas las dependencias opcionales
 uv pip install -e ".[full]"
-```
 
-### Testing Before Publication
-
-```bash
-# Build package locally
+# Testing antes de publicación
 python -m build
-
-# Verify package contents
-tar -tzf dist/filekor-0.1.0.tar.gz
-
-# Install locally for testing
-pip install dist/filekor-0.1.0.tar.gz
-```
-
-### Local Installation
-
-```bash
-poetry install                    # Editable mode (development)
-poetry install --with dev         # With dev dependencies
-poetry install --all-extras      # All optional dependencies
-```
-
-### Testing Before Publication
-
-```bash
-poetry build                                    # Build locally
-tar -tzf dist/filekor-0.1.0.tar.gz              # Verify contents
-pip install dist/filekor-0.1.0.tar.gz           # Install locally
+tar -tzf dist/filekor-0.1.0.tar.gz  # Verificar contenido
+uv pip install dist/filekor-0.1.0.tar.gz  # Instalar local
 ```
 
 ---
@@ -237,21 +223,21 @@ pip install dist/filekor-0.1.0.tar.gz           # Install locally
 
 ### Pre-publication Checklist
 
-- [ ] Version updated in pyproject.toml
-- [ ] README.md contains accurate description
-- [ ] LICENSE file present
-- [ ] All dependencies declared
-- [ ] CLI entry point tested locally
-- [ ] Package builds without errors
-- [ ] Package installs correctly in virtual environment
-- [ ] Tests pass
+- [ ] Versión actualizada en pyproject.toml
+- [ ] README.md con descripción precisa
+- [ ] LICENSE presente
+- [ ] Todas las dependencias declaradas
+- [ ] CLI entry point testeado localmente
+- [ ] El paquete hace build sin errores
+- [ ] El paquete instala correctamente en entorno virtual
+- [ ] Tests pasan
 
 ### Validation Commands
 
 ```bash
-poetry show                              # Check metadata
-poetry build && twine check dist/*       # Build and verify
-poetry publish --dry-run                 # Dry-run
+python -m build                              # Build
+twine check dist/*                          # Verificar paquete
+twine upload --dry-run dist/*              # Dry-run de publicación
 ```
 
 ---
@@ -260,13 +246,13 @@ poetry publish --dry-run                 # Dry-run
 
 ### Wheel (Primary)
 
-Faster installation, pre-built, no build step on user machine. Format: `filekor-0.1.0-py3-none-any.whl`
+Instalación más rápida, pre-built, sin paso de build en la máquina del usuario. Formato: `filekor-0.1.0-py3-none-any.whl`
 
 ### Source Distribution (Secondary)
 
-Required for edge cases. Format: `filekor-0.1.0.tar.gz`
+Necesario para edge cases. Formato: `filekor-0.1.0.tar.gz`
 
-Poetry generates both formats with `poetry build`.
+`python -m build` genera ambos formatos.
 
 ---
 
@@ -330,7 +316,7 @@ fileKor/
 - Avoids `fileKor/filekor/` directory structure
 - Clear separation between project config and source code
 - Standard modern Python practice
-- Works with uv, poetry, and pip
+- Works with uv and pip
 
 ### Installation
 

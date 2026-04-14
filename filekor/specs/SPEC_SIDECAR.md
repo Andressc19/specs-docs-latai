@@ -135,30 +135,24 @@ Always `"filekor"`.
 
 ## Sidecar Location
 
-| Option | Location | Pros | Cons |
-|--------|----------|------|------|
-| **A. Per file** | `archivo.kor` alongside the file | Maximum portability | "Clutter" in folders |
-| **B. Centralized** | `.filekor/sidecars/{hash}.kor` | Clean | Lost when moving |
-| **C. Subfolder** | `carpeta/.filekor/data.json` | Balance | Path drilling |
-
-**Decision:** Default centralized, optional per file for portability.
-
----
-
-## Related Cache
-
-The sidecar can reference cache files:
+The sidecar is located as `.kor.json` alongside the folder:
 
 ```
+carpeta/
+├── .kor.json                 # Sidecar alongside folder
+└── ...
 .filekor/
-├── sidecars/
-│   └── {hash_sha256}.json
 ├── cache/
 │   ├── text/
 │   │   └── {hash_sha256}.txt      # Extracted text
 │   └── previews/
 │       └── {hash_sha256}.txt      # Preview/snippet
 ```
+
+This provides:
+- **Portability:** Moves with the folder
+- **Clean:** No clutter in folder root
+- **Independence:** Reconstruct without re-processing
 
 ---
 

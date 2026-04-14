@@ -3,8 +3,7 @@
 **Version:** 1.0  
 **Date:** April 2026  
 **Author:** Andres Camperos  
-**Document Type:** Project Specification  
-**Status:** Pre-Development (Phase 0)
+**Document Type:** Project Specification
 
 ---
 
@@ -16,8 +15,6 @@
 |------|-------------|
 | **PyPI** | Imported as a Python module |
 | **CLI** | Executed from terminal |
-
-**fileKor is NOT:** Complete TUI, search engine, centralized indexing system, cloud service.
 
 ---
 
@@ -254,7 +251,8 @@ See full document: [SPEC_PHASES.md](SPEC_PHASES.md)
 | [SPEC_TAXONOMY.md](SPEC_TAXONOMY.md) | Label taxonomy |
 | [SPEC_PHASES.md](SPEC_PHASES.md) | Phase-based construction plan |
 | [SPEC_CLI.md](SPEC_CLI.md) | Detailed CLI interface |
-| questions.md | Answered design decisions |
+| [SPEC_PUBLISH.md](SPEC_PUBLISH.md) | Plan for publish in PyPI |
+
 
 ---
 

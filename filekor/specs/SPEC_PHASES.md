@@ -19,7 +19,7 @@
 
 ### Deliverables:
 
-- [ ] Project structure (poetry/pyproject.toml)
+- [ ] Project structure (pyproject.toml)
 - [ ] Layer 0: Hash + cache check (stdlib only)
 - [ ] Layer 1 Adapter interface
 - [ ] MockMetadataAdapter (realistic data)
