@@ -1,6 +1,6 @@
 # specs-docs-latai
 
-Documentación técnica y especificaciones para proyectos de Gentleman.Dots.
+Documentación técnica y especificaciones para proyectos de Latai
 
 ## Estructura
 
