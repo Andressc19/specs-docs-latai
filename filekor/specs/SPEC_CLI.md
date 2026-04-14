@@ -9,12 +9,11 @@
 
 | Command | Description |
 |---------|-------------|
-| `filekor extract <path>` | Extract text from file |
+| `filekor extract <path>` | Extract text from file, -d for directories|
 | `filekor summarize <path>` | Generate summary (short by default) |
 | `filekor labels <path>` | Suggest labels |
 | `filekor preview <path>` | Generate preview |
 | `filekor sidecar <path>` | Generate sidecar JSON file |
-| `filekor batch <directory>` | Process complete directory |
 
 ---
 
@@ -33,6 +32,9 @@ filekor extract documento.pdf --output texto.txt
 
 # Output format
 filekor extract documento.pdf --format json
+
+# Process directory recursively (uses SQLite index)
+filekor extract ./documentos/ --dir
 ```
 
 **Options:**
@@ -41,6 +43,7 @@ filekor extract documento.pdf --format json
 |------|-------------|---------|
 | `--output, -o` | Output file | stdout |
 | `--format, -f` | Format: text, json | text |
+| `--dir` | Process directory recursively | False |
 | `--cache` | Use cache if exists | False |
 | `--no-cache` | Force reprocessing | False |
 

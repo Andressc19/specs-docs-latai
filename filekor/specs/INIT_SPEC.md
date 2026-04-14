@@ -176,8 +176,7 @@ See full document: [SPEC_LAYERS.md](SPEC_LAYERS.md)
 
 ### Confidence Threshold
 
-- Hardcoded in Phase 0 (e.g: 0.8)
-- Configurable via `config.yaml` in later phases
+- Configurable via `config.yaml` default 0.8
 
 ---
 
@@ -205,6 +204,47 @@ See full document: [SPEC_TAXONOMY.md](SPEC_TAXONOMY.md)
 | `BROKEN` | Cannot be read |
 
 **Philosophy:** Don't attempt to decrypt, mark and continue.
+
+---
+
+## 7b. Persistence Strategy
+
+filekor usa un enfoque de persistencia dual:
+
+### SQLite Index (Primary)
+
+- **Location:** `~/.filekor/index.db` (en el home del usuario)
+- **Purpose:** Índice centralizado para búsqueda rápida y tracking de archivos escaneados
+- **Tables:** files, metadata, labels, summaries, assessment, index_status
+
+### Sidecar Files (Optional)
+
+- **Location:** `{archivo}.kor` junto al archivo original
+- **Purpose:** Portabilidad — si mueves los archivos, la metadata viaja con ellos
+- **Format:** JSON
+
+### Flujo de Trabajo
+
+```
+filekor extract ./carpeta/ --dir
+  → Lee ~/.filekor/index.db
+  → Compara hash de cada archivo vs índice
+  → Solo procesa archivos nuevos/modificados
+  → Genera .kor sidecar (opcional)
+  → Actualiza índice SQLite
+
+filekor index --rebuild
+  → Escanea directorio buscando .kor files
+  → Reconstruye registros en SQLite desde sidecars
+```
+
+### Beneficios
+
+| Approach | Ventaja |
+|----------|---------|
+| SQLite | Búsqueda rápida, filtros, indexación |
+| .kor | Portabilidad, single source of truth por archivo |
+| Rebuild | Puede reconstruir BD desde .kor existentes |
 
 ---
 
@@ -273,3 +313,5 @@ See full document: [SPEC_PHASES.md](SPEC_PHASES.md)
 | D011 | Confidence threshold hardcoded + configurable |
 | D012 | Sidecar schema derives from consumer's FileRecord |
 | D013 | Metadata files named `.kor` (e.g: `file.kor`) |
+| D014 | Dual persistence: SQLite index in ~/.filekor/ + optional .kor sidecars |
+| D015 | SQLite index can be reconstructed from existing .kor files |

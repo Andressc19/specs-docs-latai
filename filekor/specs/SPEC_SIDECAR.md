@@ -14,43 +14,37 @@ The sidecar is a JSON file that accompanies each processed file, allowing:
 
 ---
 
-## Schema: `archivo.kor`
+## Schema: `.kor`
 
-```json
-{
-  "version": "1.0",
-  "file": {
-    "path": "contracts/price-contract.pdf",
-    "name": "price-contract.pdf",
-    "extension": "pdf",
-    "size_bytes": 120344,
-    "modified_at": "2026-04-01T10:00:00Z",
-    "hash_sha256": "abc123..."
-  },
-  "metadata": {
-    "author": "John Doe",
-    "created": "2026-03-15T09:30:00Z",
-    "pages": 12
-  },
-  "content": {
-    "language": "es",
-    "word_count": 1542
-  },
-  "summary": {
-    "short": "Commercial annex with provider pricing for Q2 2026...",
-    "long": "Full analysis: This document contains a commercial annex..."
-  },
-  "labels": {
-    "suggested": ["finance", "contract"],
-    "confidence": {
-      "finance": 0.92,
-      "contract": 0.88
-    }
-  },
-  "parser_status": "OK",
-  "generated_at": "2026-04-08T10:00:00Z",
-  "generated_by": "filekor"
-}
+```yaml
+version: "1.0"
+file:
+  path: "contracts/price-contract.pdf"
+  name: "price-contract.pdf"
+  extension: "pdf"
+  size_bytes: 120344
+  modified_at: "2026-04-01T10:00:00Z"
+  hash_sha256: "abc123..."
+metadata:
+  author: "John Doe"
+  created: "2026-03-15T09:30:00Z"
+  pages: 12
+content:
+  language: "es"
+  word_count: 1542
+summary:
+  short: "Commercial annex with provider pricing for Q2 2026..."
+  long: "Full analysis: This document contains a commercial annex..."
+labels:
+  suggested:
+    - "finance"
+    - "contract"
+  confidence:
+    finance: 0.92
+    contract: 0.88
+parser_status: "OK"
+generated_at: "2026-04-08T10:00:00Z"
+generated_by: "filekor"
 ```
 
 ---
@@ -135,39 +129,60 @@ Always `"filekor"`.
 
 ## Sidecar Location
 
-The sidecar is located as `.kor.json` alongside the folder:
+### Single File
+
+For a single file, the sidecar is created next to the file:
 
 ```
-carpeta/
-├── .kor.json                 # Sidecar alongside folder
-└── ...
-.filekor/
-├── cache/
-│   ├── text/
-│   │   └── {hash_sha256}.txt      # Extracted text
-│   └── previews/
-│       └── {hash_sha256}.txt      # Preview/snippet
+folder/
+├── document.pdf
+└── document.pdf.kor     ← Sidecar next to the file
 ```
 
-This provides:
-- **Portability:** Moves with the folder
-- **Clean:** No clutter in folder root
-- **Independence:** Reconstruct without re-processing
+### Directory (with --dir)
+
+When processing a directory with `--dir`, a `.filekor/` structure is created:
+
+```
+./project/
+├── file1.pdf
+├── file2.pdf
+├── subfolder/
+│   └── file3.pdf
+└── .filekor/
+    └── index.kor          ← Single file with merge of all files
+```
+
+**Process:**
+1. Process each file in parallel (creates temporary `{sha}.kor` files)
+2. Merge: combines all into single `.filekor/index.kor`
+3. Cleanup: removes temporary files
+
+### Benefits
+
+- **Portability:** `.filekor/index.kor` can be moved/copied with the project
+- **Parallel processing:** Multiple threads without lock (each writes its own .kor)
+- **Clean:** Single file per project, no clutter
 
 ---
 
 ## Cache Example in Sidecar (future)
 
-```json
-{
-  "version": "1.0",
-  "file": { ... },
-  "cache_refs": {
-    "text": ".filekor/cache/text/abc123.txt",
-    "preview": ".filekor/cache/previews/abc123.txt"
-  },
-  ...
-}
+```yaml
+version: "1.0"
+file:
+  path: "contracts/price-contract.pdf"
+  name: "price-contract.pdf"
+  extension: "pdf"
+  size_bytes: 120344
+  modified_at: "2026-04-01T10:00:00Z"
+  hash_sha256: "abc123..."
+cache_refs:
+  text: ".filekor/cache/text/abc123.txt"
+  preview: ".filekor/cache/previews/abc123.txt"
+parser_status: "OK"
+generated_at: "2026-04-08T10:00:00Z"
+generated_by: "filekor"
 ```
 
 ---
