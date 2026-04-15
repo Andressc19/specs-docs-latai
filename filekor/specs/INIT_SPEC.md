@@ -78,7 +78,7 @@ class SidecarFile:
     generated_by: str = "filekor"
 ```
 
-> Detailed JSON schema: see [SPEC_SIDECAR.md](SPEC_SIDECAR.md)
+> Detailed YAML schema: see [SPEC_SIDECAR.md](SPEC_SIDECAR.md)
 
 ```python
 # Internal DTOs for SidecarFile
@@ -221,7 +221,7 @@ filekor usa un enfoque de persistencia dual:
 
 - **Location:** `{archivo}.kor` junto al archivo original
 - **Purpose:** Portabilidad — si mueves los archivos, la metadata viaja con ellos
-- **Format:** JSON
+- **Format:** YAML
 
 ### Flujo de Trabajo
 

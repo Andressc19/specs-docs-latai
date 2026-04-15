@@ -13,7 +13,7 @@
 | `filekor summarize <path>` | Generate summary (short by default) |
 | `filekor labels <path>` | Suggest labels |
 | `filekor preview <path>` | Generate preview |
-| `filekor sidecar <path>` | Generate sidecar JSON file |
+| `filekor sidecar <path>` | Generate sidecar YAML file |
 
 ---
 
@@ -191,28 +191,47 @@ filekor batch ./documentos/ --incremental
 
 ## Config File
 
+Config file is located at `~/.filekor/config.yaml` (user home directory).
+
+### Config Format
+
 ```yaml
-# ~/.filekor.yaml
+# ~/.filekor/config.yaml
 filekor:
   version: "1.0"
   
   cache:
     dir: "~/.filekor/cache"
     ttl_days: 30
-    
+     
   labels:
     taxonomy: default
     confidence_threshold: 0.7
-    
+    config_file: ./labels.properties  # Optional path to labels.properties
+     
   layers:
     level: standard
     layer_1_threshold: 0.8
     layer_2_threshold: 0.9
-    
+     
   llm:
-    provider: gemini
-    api_key: env:GEMINI_API_KEY
+    enabled: true
+    provider: gemini  # gemini, openai, anthropic, ollama
+    api_key: ${GEMINI_API_KEY}  # Supports env var interpolation
+    model: gemini-2.0-flash
+    max_content_chars: 1500
 ```
+
+### Environment Variable Interpolation
+
+Config values support `${VAR_NAME}` syntax to read from environment variables:
+
+```yaml
+llm:
+  api_key: ${GEMINI_API_KEY}  # Reads GEMINI_API_KEY env var
+```
+
+This keeps sensitive data (API keys) out of config files.
 
 ---
 
