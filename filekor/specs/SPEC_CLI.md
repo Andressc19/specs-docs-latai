@@ -9,11 +9,12 @@
 
 | Command | Description |
 |---------|-------------|
-| `filekor extract <path>` | Extract text from file, -d for directories|
-| `filekor summarize <path>` | Generate summary (short by default) |
-| `filekor labels <path>` | Suggest labels |
-| `filekor preview <path>` | Generate preview |
-| `filekor sidecar <path>` | Generate sidecar YAML file |
+| `filekor extract <path>` | Extract text content from a file or directory |
+| `filekor process <path>` | Process a PDF file and extract metadata (legacy) |
+| `filekor sidecar <path>` | Generate sidecar YAML file with metadata and labels |
+| `filekor labels <path>` | Suggest taxonomy labels and create/update .kor file |
+| `filekor sync <path>` | Sync existing .kor files to database |
+| `filekor status <path>` | Show status of .kor files |
 
 ---
 
@@ -24,16 +25,13 @@
 ```bash
 filekor extract <path> [OPTIONS]
 
-# Extract text from a PDF
+# Extract text from a single file
 filekor extract documento.pdf
 
-# Extract to specific file
-filekor extract documento.pdf --output texto.txt
+# Extract text to specific output file
+filekor extract documento.pdf -o extracted.txt
 
-# Output format
-filekor extract documento.pdf --format json
-
-# Process directory recursively (uses SQLite index)
+# Process directory recursively
 filekor extract ./documentos/ --dir
 ```
 
@@ -41,91 +39,32 @@ filekor extract ./documentos/ --dir
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--output, -o` | Output file | stdout |
-| `--format, -f` | Format: text, json | text |
-| `--dir` | Process directory recursively | False |
-| `--cache` | Use cache if exists | False |
-| `--no-cache` | Force reprocessing | False |
+| `--output, -o` | Output file path | stdout |
+| `--dir, -d` | Process directory instead of single file | False |
 
 ---
 
-### `filekor summarize`
+### `filekor process`
 
 ```bash
-filekor summarize <path> [OPTIONS]
+filekor process <path> [OPTIONS]
 
-# Short summary (default)
-filekor summarize documento.pdf
+# Process PDF and output metadata in YAML
+filekor process documento.pdf
 
-# Long summary
-filekor summarize documento.pdf --type long
-filekor summarize documento.pdf -t long
+# Process PDF and output metadata in JSON
+filekor process documento.pdf --format json
 
-# Save to file
-filekor summarize documento.pdf --output resumen.txt
+# Output to specific file
+filekor process documento.pdf -o metadata.yaml
 ```
 
 **Options:**
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--type, -t` | Type: short, long | short |
-| `--output, -o` | Output file | stdout |
-
----
-
-### `filekor labels`
-
-```bash
-filekor labels <path> [OPTIONS]
-
-# Suggest labels
-filekor labels documento.pdf
-
-# With confidence scores
-filekor labels documento.pdf --show-confidence
-```
-
-**Example output:**
-
-```
-Suggested labels: contract, finance
-Confidence:
-  contract: 0.92
-  finance: 0.88
-  provider: 0.30
-```
-
----
-
-### `filekor preview`
-
-```bash
-filekor preview <path> [OPTIONS]
-
-# File preview
-filekor preview documento.pdf
-
-# Preview with metadata
-filekor preview documento.pdf --show-metadata
-
-# Limited lines
-filekor preview documento.pdf --lines 50
-```
-
-**Example output:**
-
-```
-File: contrato-proveedor-2026.pdf
-Size: 120 KB | Pages: 12 | Lang: es
-----------------------------------------
-[Preview]
-This service contract establishes the terms and
-conditions for cloud services provision...
-----------------------------------------
-Labels: contract, provider
-Summary: Commercial annex with provider pricing...
-```
+| `--output, -o` | Output file path | stdout |
+| `--format, -f` | Output format: yaml, json | yaml |
 
 ---
 
@@ -134,58 +73,197 @@ Summary: Commercial annex with provider pricing...
 ```bash
 filekor sidecar <path> [OPTIONS]
 
-# Generate sidecar
+# Generate sidecar for single file
 filekor sidecar documento.pdf
 
-# Output directory
-filekor sidecar documento.pdf --output ./metadata/
+# Generate sidecar with custom output path
+filekor sidecar documento.pdf -o ./metadata/
 
-# Force regeneration
+# Process directory recursively
+filekor sidecar ./documentos/ --dir
+
+# Use custom workers (from config.yaml or override)
+filekor sidecar ./documentos/ --dir --workers 8
+
+# Enable watch mode for real-time progress
+filekor sidecar ./documentos/ --dir --watch
+
+# Force regeneration (ignore existing .kor)
 filekor sidecar documento.pdf --no-cache
-```
 
-**Output:**
+# Use custom config.yaml for LLM settings
+filekor sidecar documento.pdf --config /path/to/config.yaml
 
-Generates `documento.kor` in the same directory or in `--output`.
-
----
-
-### `filekor batch`
-
-```bash
-filekor batch <directory> [OPTIONS]
-
-# Process complete directory
-filekor batch ./documentos/
-
-# Analysis level
-filekor batch ./documentos/ --level fast
-
-# Only new/modified files
-filekor batch ./documentos/ --incremental
+# Enable verbose output
+filekor sidecar documento.pdf --verbose
 ```
 
 **Options:**
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--level, -l` | Level: minimal, fast, standard, deep | standard |
-| `--output, -o` | Output directory | "." |
-| `--incremental` | Only process changes | False |
-| `--workers, -w` | Parallel workers | 1 |
+| `--output, -o` | Output file/directory path | Same directory as input with .kor extension |
+| `--no-cache` | Force regeneration, ignore existing sidecar | False |
+| `--config, -c` | Custom config.yaml file path | Auto-search |
+| `--verbose, -v` | Enable detailed output | False |
+| `--dir, -d` | Process directory instead of single file | False |
+| `--workers` | Number of parallel workers (from config.yaml) | From config (default 4) |
+| `--watch` | Enable event emitter for real-time progress | False |
+
+**Behavior:**
+
+- For single file: generates `{filename}.kor` in same directory (or specified output)
+- For directory: processes each supported file and generates `.kor` files in `.filekor/` subdirectory
+- Supported extensions: pdf, txt, md
+- Labels are generated using LLM if configured (requires config.yaml with enabled LLM)
+- If LLM not configured, sidecar will be generated without labels (labels: null)
 
 ---
 
-## Global Flags
+### `filekor labels`
+
+```bash
+filekor labels <path> [OPTIONS]
+
+# Suggest labels for single file (creates/updates .kor)
+filekor labels documento.pdf
+
+# Suggest labels for directory
+filekor labels ./documentos/ --dir
+
+# Use custom labels.properties (taxonomy)
+filekor labels documento.pdf --config /path/to/custom-labels.properties
+
+# Use custom config.yaml for LLM
+filekor labels documento.pdf --llm-config /path/to/config.yaml
+
+# Enable watch mode for real-time progress
+filekor labels ./documentos/ --dir --watch
+```
+
+**Options:**
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--help, -h` | Show help | - |
-| `--version, -v` | Show version | - |
-| `--verbose` | Detailed output | False |
-| `--quiet, -q` | Suppress output | False |
-| `--config` | Config file | ~/.filekor.yaml |
-| `--cache-dir` | Cache directory | ~/.filekor/cache |
+| `--config, -c` | Custom labels.properties file path | Auto-search |
+| `--llm-config` | Custom config.yaml file for LLM settings | Auto-search |
+| `--dir, -d` | Process directory instead of single file | False |
+| `--workers` | Number of parallel workers (from config.yaml) | From config (default 4) |
+| `--watch` | Enable event emitter for real-time progress | False |
+
+**Behavior:**
+
+- If `.kor` file EXISTS: loads it and adds/replaces labels (overwrites existing)
+- If `.kor` file does NOT exist: creates new `.kor` with file info (path, name, size, hash, etc.) and adds labels
+- Labels are identified by SHA256 hash of the source file
+- LLM must be configured (will fail with error if not configured)
+- Output: Lists suggested labels to stdout, then shows loading/saving messages
+
+**Example output:**
+```
+documentation
+testing
+code
+Loading existing: documento.kor
+Saved: documento.kor
+```
+
+**New .kor created example:**
+```yaml
+version: "1.0"
+file:
+  path: documento.pdf
+  name: documento.pdf
+  extension: pdf
+  size_bytes: 12345
+  modified_at: "2026-04-15T10:00:00Z"
+  hash_sha256: "abc123..."
+labels:
+  suggested:
+    - documentation
+    - testing
+    - code
+  source: llm
+parser_status: OK
+generated_at: "2026-04-15T10:30:00Z"
+```
+
+---
+
+### `filekor sync`
+
+```bash
+filekor sync <path> [OPTIONS]
+
+# Sync a single .kor file to database
+filekor sync document.kor
+
+# Sync all .kor files in a directory
+filekor sync ./docs/ --dir
+
+# Sync with verbose output
+filekor sync ./docs/ --dir --verbose
+```
+
+**Options:**
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `-d`, `--dir` | Sync all .kor files in directory | False |
+| `-v`, `--verbose` | Show detailed output | False |
+
+**Behavior:**
+
+- Syncs existing .kor files to the SQLite database without regenerating them
+- Useful for bulk syncing files created before auto_sync was enabled
+- Updates the full-text search index (FTS5) automatically
+
+---
+
+### `filekor status`
+
+```bash
+filekor status <path> [OPTIONS]
+
+# Show status for single file
+filekor status documento.pdf
+
+# Show status for directory
+filekor status ./documentos/ --dir
+
+# Enable watch mode for real-time updates
+filekor status ./documentos/ --dir --watch
+```
+
+**Options:**
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--dir, -d` | Show status for directory instead of single file | False |
+| `--watch` | Enable watch mode for real-time updates | False |
+
+**Behavior:**
+
+- For single file: shows whether .kor exists and its label count
+- For directory: lists all .kor files in the directory tree with their label counts
+- In watch mode: emits real-time events for changes to .kor files
+
+**Example output (single file):**
+```
+File: documento.pdf
+Status: .kor file exists
+Labels: 3 (documentation, testing, code)
+Hash: 87319164c0efd5f85221812d1f2c58a269d783678e82a9151120e606db5451ba
+```
+
+**Example output (directory):**
+```
+Directory: ./documentos/
+Files processed: 3
+├── doc1.pdf → doc1.kor: 2 labels
+├── doc2.txt → doc2.kor: 0 labels
+└── doc3.md → doc3.kor: 5 labels
+```
 
 ---
 
@@ -198,28 +276,26 @@ Config file is located at `~/.filekor/config.yaml` (user home directory).
 ```yaml
 # ~/.filekor/config.yaml
 filekor:
-  version: "1.0"
+  workers: 4  # Number of parallel workers for directory processing
   
-  cache:
-    dir: "~/.filekor/cache"
-    ttl_days: 30
-     
   labels:
     taxonomy: default
     confidence_threshold: 0.7
     config_file: ./labels.properties  # Optional path to labels.properties
-     
-  layers:
-    level: standard
-    layer_1_threshold: 0.8
-    layer_2_threshold: 0.9
-     
+    
   llm:
     enabled: true
-    provider: gemini  # gemini, openai, anthropic, ollama
+    provider: gemini  # gemini, openai, groq, openrouter, mock
     api_key: ${GEMINI_API_KEY}  # Supports env var interpolation
     model: gemini-2.0-flash
     max_content_chars: 1500
+    auto_sync: true  # Auto-sync to database after operations
+    
+  search:
+    weights:
+      label_match: 0.50
+      filename_match: 0.30
+      kor_content_match: 0.20
 ```
 
 ### Environment Variable Interpolation
@@ -235,45 +311,6 @@ This keeps sensitive data (API keys) out of config files.
 
 ---
 
-## Analysis Levels (CLI)
-
-```bash
-# Only hash (dup detection)
-filekor batch ./docs --level minimal
-
-# Quick metadata
-filekor batch ./docs --level fast
-
-# With embeddings
-filekor batch ./docs --level standard
-
-# Full LLM
-filekor batch ./docs --level deep
-```
-
----
-
-## Usage Examples
-
-```bash
-# 1. Scan directory for first time
-filekor batch ./proyecto/ --level standard
-
-# 2. Only check new files
-filekor batch ./proyecto/ --incremental
-
-# 3. Quick preview of a file
-filekor preview ./proyecto/contrato.pdf
-
-# 4. Generate all sidecars
-filekor batch ./proyecto/ --output ./proyecto/.filekor/
-
-# 5. Long summary on demand
-filekor summarize ./proyecto/doc.pdf --type long
-```
-
----
-
 ## Exit Codes
 
 | Code | Meaning |
@@ -282,5 +319,95 @@ filekor summarize ./proyecto/doc.pdf --type long
 | 1 | General error |
 | 2 | Argument error |
 | 3 | File not found |
-| 4 | Corrupted cache |
-| 5 | Permission error |
+| 4 | Permission denied |
+| 5 | LLM not configured (for labels command) |
+
+---
+
+## Library API
+
+filekor can be used as a Python library for programmatic access to the database and search functionality.
+
+### Quick Start
+
+```python
+from filekor.db import get_db, sync_file, search_files
+
+# Get database instance
+db = get_db()
+
+# Sync a .kor file to the database
+sync_file("./document.kor")
+
+# Search files by labels and content with scoring
+results = search_files(
+    labels=["finance", "2026"],
+    query="budget report"
+)
+```
+
+### Available Functions
+
+| Function | Description |
+|----------|-------------|
+| `get_db()` | Get singleton database instance |
+| `sync_file(kor_path)` | Sync .kor file to database |
+| `query_by_label(label)` | Query files by single label |
+| `query_by_labels(labels)` | Query files by multiple labels (OR) |
+| `query_all()` | Get all files with labels |
+| `search_content(query, limit)` | Full-text search in filename + metadata |
+| `search_files(labels, query, limit, weights)` | Combined search with scoring |
+
+### Search API
+
+The search API supports filtering by labels and full-text search:
+
+```python
+from filekor.db import search_files, query_by_labels, search_content
+
+# 1. Query by multiple labels (OR logic)
+results = query_by_labels(["finance", "2024"])
+
+# 2. Full-text search (FTS5)
+results = search_content("provider costs", limit=10)
+
+# 3. Combined search with scoring
+results = search_files(
+    labels=["finance", "2026"],
+    query="provider costs",
+    weights={
+        "label_match": 0.50,
+        "filename_match": 0.30,
+        "kor_content_match": 0.20
+    }
+)
+
+# Result format:
+# {
+#     "file_path": "./docs/report.pdf",
+#     "name": "report.pdf",
+#     "labels": ["finance", "2026", "budget"],
+#     "score": 0.85,
+#     "score_breakdown": {
+#         "label_match": 1.0,
+#         "filename_match": 0.5,
+#         "kor_content_match": 0.8
+#     }
+# }
+```
+
+### Scoring System
+
+The `search_files()` function calculates relevance scores:
+
+| Factor | Weight | Description |
+|--------|--------|-------------|
+| label_match | 0.50 | Files matching requested labels |
+| filename_match | 0.30 | Query matches filename |
+| kor_content_match | 0.20 | Query matches .kor metadata |
+
+Weights are configurable via the `weights` parameter.
+
+--- 
+
+**Note:** This specification reflects the currently implemented functionality.

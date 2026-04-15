@@ -62,72 +62,62 @@ filekor extract ./project/ --dir
 ```sql
 -- 1. files: Inventory of scanned files
 CREATE TABLE files (
-    id INTEGER PRIMARY KEY,
-    path TEXT UNIQUE NOT NULL,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kor_path TEXT UNIQUE NOT NULL,
+    file_path TEXT NOT NULL,
     name TEXT NOT NULL,
     extension TEXT,
     size_bytes INTEGER,
-    modified_at TEXT,  -- ISO 8601
+    modified_at TIMESTAMP,
     hash_sha256 TEXT,
-    created_at TEXT,
-    updated_at TEXT
+    metadata_json TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. metadata: Extracted metadata (PyExifTool)
-CREATE TABLE metadata (
-    id INTEGER PRIMARY KEY,
-    file_id INTEGER REFERENCES files(id),
-    author TEXT,
-    title TEXT,
-    subject TEXT,
-    keywords TEXT,
-    created TEXT,
-    pages INTEGER,
-    parser_status TEXT
-);
-
--- 3. labels: Classification
+-- 2. labels: Classification
 CREATE TABLE labels (
-    id INTEGER PRIMARY KEY,
-    file_id INTEGER REFERENCES files(id),
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_id INTEGER NOT NULL,
     label TEXT NOT NULL,
     confidence REAL,
-    source TEXT
+    source TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
 );
 
--- 4. summaries: Generated summaries
-CREATE TABLE summaries (
-    id INTEGER PRIMARY KEY,
-    file_id INTEGER REFERENCES files(id),
-    summary_type TEXT,  -- 'SHORT', 'LONG'
-    summary_text TEXT,
-    key_points TEXT,   -- JSON array
-    generated_at TEXT
+-- 3. schema_version: Migration tracking
+CREATE TABLE schema_version (
+    version INTEGER PRIMARY KEY,
+    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 5. assessment: Evaluation (relevance + health)
-CREATE TABLE assessment (
-    id INTEGER PRIMARY KEY,
-    file_id INTEGER REFERENCES files(id),
-    relevance_status TEXT,
-    relevance_score INTEGER,
-    health_status TEXT,
-    health_score INTEGER,
-    reasons TEXT
+-- 4. files_fts: Full-text search virtual table (FTS5)
+CREATE VIRTUAL TABLE files_fts USING fts5(
+    name,
+    metadata_json,
+    content='files',
+    content_rowid='id',
+    tokenize='porter unicode61'
 );
 
--- 6. index_status: Index state
-CREATE TABLE index_status (
-    id INTEGER PRIMARY KEY,
-    status TEXT,              -- EMPTY, SCANNING, PROCESSING, COMPLETED, FAILED
-    total_files INTEGER,
-    processed_files INTEGER,
-    failed_count INTEGER,
-    current_file TEXT,
-    last_scan_at TEXT,
-    started_at TEXT,
-    completed_at TEXT
-);
+-- Triggers for automatic FTS5 synchronization
+CREATE TRIGGER files_ai AFTER INSERT ON files BEGIN
+    INSERT INTO files_fts(rowid, name, metadata_json)
+    VALUES (new.id, new.name, new.metadata_json);
+END;
+
+CREATE TRIGGER files_ad AFTER DELETE ON files BEGIN
+    INSERT INTO files_fts(files_fts, rowid, name, metadata_json)
+    VALUES ('delete', old.id, old.name, old.metadata_json);
+END;
+
+CREATE TRIGGER files_au AFTER UPDATE ON files BEGIN
+    INSERT INTO files_fts(files_fts, rowid, name, metadata_json)
+    VALUES ('delete', old.id, old.name, old.metadata_json);
+    INSERT INTO files_fts(rowid, name, metadata_json)
+    VALUES (new.id, new.name, new.metadata_json);
+END;
 ```
 
 ---
@@ -146,126 +136,189 @@ CREATE TABLE index_status (
 
 ## Index vs Sidecar
 
-| Aspect | SQLite Index | Project Sidecar (.filekor/index.kor) |
-|--------|---------------|-------------------------------------|
-| **Location** | `~/.filekor/index.db` | `./project/.filekor/index.kor` |
+| Aspect | SQLite Index | Project Sidecar (.filekor/*.kor) |
+|--------|---------------|----------------------------------|
+| **Location** | `~/.filekor/index.db` | `./project/.filekor/*.kor` |
 | **Portability** | No (tied to user) | Yes (travels with project) |
-| **Search** | Fast (SQL queries) | Requires reading entire file |
+| **Search** | Fast (SQL + FTS5 queries) | Requires loading into DB |
 | **Scope** | Global (all projects) | Local (single project) |
+| **Use Case** | Runtime queries, external tools | Archive, backup, sharing |
 
 ---
 
 ## Workflow
 
-### Extract with Index (Directory)
+### Process Directory with Auto-Sync
 
 ```bash
-filekor extract ./project/ --dir
+filekor sidecar ./project/ --dir
 ```
 
-Flow:
-1. Reads `~/.filekor/index.db` to know which files are already processed
-2. Compares hash of each file vs index
-3. Only processes new/modified files (in parallel)
-4. Generates temporary `{sha}.kor` files for each file
-5. Merge: combines all `{sha}.kor` into single `.filekor/index.kor`
-6. Cleanup: removes temporary files
-7. Updates `~/.filekor/index.db` with reference to new `index.kor`
+Flow (when `auto_sync: true` in config.yaml):
+1. Scans directory for supported files (pdf, txt, md)
+2. Processes files in parallel (extraction, metadata, labels)
+3. Generates `.kor` files in `.filekor/` subdirectory
+4. Auto-syncs each `.kor` to `~/.filekor/index.db`
+5. Updates FTS5 index automatically
 
-### Extract Single File
+### Process Single File with Auto-Sync
 
 ```bash
-filekor extract document.pdf
+filekor sidecar document.pdf
 ```
 
 Flow:
 1. Processes the file individually
-2. Generates `document.pdf.kor` next to the file
-3. Updates `~/.filekor/index.db`
+2. Generates `.kor` in `.filekor/` subdirectory
+3. Auto-syncs to database (if enabled)
 
-### Rebuild Index from Sidecars
+### Manual Sync
 
 ```bash
-filekor index --rebuild ./project/
+filekor sync ./project/ --dir
 ```
 
 Flow:
-1. Scans directory looking for `.filekor/index.kor`
-2. Reads the sidecar
-3. Reconstructs records in SQLite
+1. Scans directory for existing `.kor` files
+2. Syncs each `.kor` to database without regenerating
+3. Updates FTS5 index
+
+Use cases:
+- Bulk sync files created before auto_sync was enabled
+- Rebuild database from existing `.kor` files
+- Sync after database corruption
 
 ---
 
-## Index Management Commands
+## Database API
+
+The SQLite database is accessed through the Python library API, not CLI commands.
+
+### Library Functions
+
+```python
+from filekor.db import (
+    get_db,           # Get database singleton
+    sync_file,        # Sync .kor file to database
+    query_by_label,   # Query by single label
+    query_by_labels,  # Query by multiple labels (OR)
+    query_all,        # Get all files
+    search_content,   # Full-text search
+    search_files,     # Combined search with scoring
+)
+
+# Get database instance
+db = get_db()
+
+# Sync a .kor file
+sync_file("./document.kor")
+
+# Query by single label
+files = query_by_label("finance")
+
+# Query by multiple labels (OR logic)
+files = query_by_labels(["finance", "2024"])
+
+# Full-text search in filename and metadata
+results = search_content("budget report", limit=10)
+
+# Combined search with scoring
+results = search_files(
+    labels=["finance", "2026"],
+    query="provider costs",
+    limit=50,
+    weights={
+        "label_match": 0.50,
+        "filename_match": 0.30,
+        "kor_content_match": 0.20
+    }
+)
+```
+
+### CLI Integration
+
+Database operations are triggered automatically from CLI commands:
 
 ```bash
-# View current state (one-time output)
-filekor index status
+# Process directory with auto-sync (if enabled in config.yaml)
+filekor sidecar ./project/ --dir
 
-# View state in JSON format (for programmatic access)
-filekor index status --json
+# Sync existing .kor files to database
+filekor sync ./project/ --dir
 
-# Watch mode (real-time updates every 2 seconds)
-filekor index watch
-
-# Process directory with index (creates .filekor/index.kor)
-filekor extract ./project/ --dir
-
-# Rebuild index from .filekor/index.kor
-filekor index --rebuild ./project/
-
-# Export index to CSV
-filekor index export --output index.csv
-
-# Clear index for a specific project
-filekor index clear ./project/
+# View status of indexed files
+filekor status ./project/ --dir
 ```
 
 ---
 
-## Index Status Commands
+## Search API
 
-```bash
-# View current state (one-time output)
-filekor index status
+### Full-Text Search (FTS5)
 
-# View state in JSON format (for programmatic access)
-filekor index status --json
+The database includes a Full-Text Search (FTS5) virtual table for fast searching across filenames and metadata.
 
-# Watch mode (real-time updates every 2 seconds)
-filekor index watch
+```python
+from filekor.db import search_content
+
+# Search in filename and .kor metadata
+results = search_content("budget report", limit=10)
+
+# Each result includes:
+# - file_path: Original file path
+# - name: Filename
+# - labels: List of labels
+# - fts_rank: Relevance rank from FTS5
 ```
 
-### JSON Output Format
+### Combined Search with Scoring
 
-```json
-{
-  "status": "PROCESSING",
-  "total_files": 100,
-  "processed_files": 15,
-  "failed_count": 2,
-  "current_file": "documento.pdf",
-  "started_at": "2026-04-14T10:30:00Z",
-  "completed_at": null
-}
+The `search_files()` function combines label filtering with full-text search and calculates a relevance score.
+
+```python
+from filekor.db import search_files
+
+results = search_files(
+    labels=["finance", "2026"],  # OR logic - any of these labels
+    query="provider costs",       # Full-text search
+    limit=50,
+    weights={                     # Configurable scoring weights
+        "label_match": 0.50,      # Weight for matching labels
+        "filename_match": 0.30,   # Weight for filename match
+        "kor_content_match": 0.20 # Weight for content match
+    }
+)
+
+# Result includes:
+# {
+#     "file_path": "./docs/report.pdf",
+#     "name": "report.pdf",
+#     "labels": ["finance", "2026", "budget"],
+#     "score": 0.85,
+#     "score_breakdown": {
+#         "label_match": 1.0,
+#         "filename_match": 0.5,
+#         "kor_content_match": 0.8
+#     }
+# }
 ```
 
-### Status Values
+### Scoring Weights
 
-| Status | Meaning |
-|--------|---------|
-| `EMPTY` | No files in queue |
-| `SCANNING` | Discovering files in directory |
-| `PROCESSING` | Extracting metadata from files |
-| `COMPLETED` | All files processed |
-| `FAILED` | Processing failed completely |
+| Factor | Default | Description |
+|--------|---------|-------------|
+| `label_match` | 0.50 | Percentage of requested labels found |
+| `filename_match` | 0.30 | Query presence in filename |
+| `kor_content_match` | 0.20 | Query presence in .kor metadata |
 
 ---
 
 ## Benefits
 
-1. **Incremental processing:** Don't re-process unchanged files
-2. **Fast search:** SQL queries over global index
-3. **Parallel processing:** Multiple threads without lock (each writes its own .kor)
-4. **Portability:** Each project has its own local `.filekor/index.kor`
-5. **Rebuild capability:** Reconstruct index from existing .kor files
+1. **Fast search:** SQL queries + FTS5 over global index
+2. **Relevance scoring:** Configurable weights for ranking results
+3. **Multi-label filtering:** OR logic for flexible label queries
+4. **Full-text search:** Search filenames and metadata efficiently
+5. **Library API:** Programmatic access for external tools
+6. **Parallel processing:** Multiple threads during extraction
+7. **Portability:** Each project has its own local `.filekor/` directory
