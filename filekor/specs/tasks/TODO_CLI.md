@@ -98,7 +98,8 @@ filekor sidecar ./documentos --dir --db
 ./documentos
 ├── informe.pdf
 ├── presentacion.pptx
-└── merged.kor
+└── .filekor
+    └── merged.kor
 ```
 
 > **Nota**: El flag `--dir` ya existe en el comando `sidecar` para especificar que se procesa un directorio. Los flags `--split`/`--no-merge` y `--db` son las nuevas funcionalidades propuestas.
