@@ -77,7 +77,7 @@ Metadata extracted from exiftool/PyExifTool.
 | Field | Type | Description |
 |-------|------|-------------|
 | `author` | string | Document author |
-| `created` | string | Creation date |
+| `created` | datetime | Creation date |
 | `pages` | int | Number of pages (PDFs) |
 | *(others)* | mixed | Additional exiftool tags |
 
